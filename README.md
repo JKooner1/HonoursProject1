@@ -60,8 +60,8 @@ python -m venv .venv
 
 # Activate Environment
 ```powershell
-.venv\Scripts\Activate.ps1
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.venv\Scripts\Activate.ps1
 ```
 
 # Upgrade pip and install dependencies
