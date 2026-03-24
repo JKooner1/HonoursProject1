@@ -1,124 +1,68 @@
-from enum import Enum
-from typing import Dict, List, Optional
+from __future__ import annotations
+
+from datetime import date
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class SourceType(str, Enum):
-    POS = "pos"
-    DELIVERY = "delivery"
-
-
-CANONICAL_COLUMNS: List[str] = [
-    "ts",
-    "sku",
-    "product_name",
-    "category",
-    "qty",
-    "unit_price_gbp",
-    "line_total_gbp",
-    "transaction_id",
-    "source",
-]
-
-REQUIRED_CANONICAL_COLUMNS: List[str] = [
-    "ts",
-    "sku",
-    "qty",
-    "line_total_gbp",
-    "source",
-]
-
-OPTIONAL_CANONICAL_COLUMNS: List[str] = [
-    "product_name",
-    "category",
-    "unit_price_gbp",
-    "transaction_id",
-]
-
 UNKNOWN_CATEGORY_LABEL = "Other"
+UNKNOWN_SUBCATEGORY_LABEL = "Other"
+
+WEEKLY_REPORT_DAILY_COLUMNS = [
+    "source_file",
+    "report_week",
+    "week_start",
+    "week_end",
+    "sale_date",
+    "department",
+    "sub_department",
+    "sku",
+    "product_name",
+    "units_sold",
+    "weekly_units",
+    "weekly_value_gbp",
+    "weekly_cost_gbp",
+    "weekly_profit_gbp",
+    "estimated_unit_price_gbp",
+    "estimated_daily_value_gbp",
+    "stock_on_hand",
+    "on_order",
+    "margin_pct",
+]
 
 
-RAW_TO_CANONICAL_COLUMN_MAP: Dict[str, Dict[str, str]] = {
-    "common": {
-        "timestamp": "ts",
-        "date_time": "ts",
-        "datetime": "ts",
-        "date": "ts",
-        "time_stamp": "ts",
-        "sku": "sku",
-        "item_sku": "sku",
-        "product_sku": "sku",
-        "stock_code": "sku",
-        "plu": "sku",
-        "product_name": "product_name",
-        "item_name": "product_name",
-        "product": "product_name",
-        "name": "product_name",
-        "category": "category",
-        "department": "category",
-        "group": "category",
-        "qty": "qty",
-        "quantity": "qty",
-        "units": "qty",
-        "unit_price": "unit_price_gbp",
-        "price": "unit_price_gbp",
-        "unit_price_gbp": "unit_price_gbp",
-        "line_total": "line_total_gbp",
-        "total": "line_total_gbp",
-        "sales_value": "line_total_gbp",
-        "revenue": "line_total_gbp",
-        "amount": "line_total_gbp",
-        "line_total_gbp": "line_total_gbp",
-        "transaction_id": "transaction_id",
-        "txn_id": "transaction_id",
-        "order_id": "transaction_id",
-        "receipt_id": "transaction_id",
-        "source": "source",
-    },
-    "pos": {
-        "till_time": "ts",
-        "till_timestamp": "ts",
-        "barcode": "sku",
-        "item": "product_name",
-        "dept": "category",
-        "sold_qty": "qty",
-        "sell_price": "unit_price_gbp",
-        "gross_sales": "line_total_gbp",
-        "basket_id": "transaction_id",
-    },
-    "delivery": {
-        "order_time": "ts",
-        "delivery_time": "ts",
-        "menu_sku": "sku",
-        "menu_item": "product_name",
-        "menu_category": "category",
-        "ordered_qty": "qty",
-        "item_price": "unit_price_gbp",
-        "order_total": "line_total_gbp",
-    },
-}
-
-
-class CanonicalSalesRecord(BaseModel):
+class WeeklyReportDailyRecord(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    ts: str = Field(..., description="Raw timestamp string before parsing")
-    sku: str = Field(..., min_length=1)
-    qty: float
-    line_total_gbp: float
-    source: SourceType
+    source_file: str
+    report_week: Optional[str] = None
+    week_start: date
+    week_end: date
+    sale_date: date
 
-    product_name: Optional[str] = None
-    category: Optional[str] = None
-    unit_price_gbp: Optional[float] = None
-    transaction_id: Optional[str] = None
+    department: str = Field(default=UNKNOWN_CATEGORY_LABEL)
+    sub_department: str = Field(default=UNKNOWN_SUBCATEGORY_LABEL)
+
+    sku: Optional[str] = None
+    product_name: str
+
+    units_sold: float
+    weekly_units: float
+    weekly_value_gbp: Optional[float] = None
+    weekly_cost_gbp: Optional[float] = None
+    weekly_profit_gbp: Optional[float] = None
+    estimated_unit_price_gbp: Optional[float] = None
+    estimated_daily_value_gbp: Optional[float] = None
+    stock_on_hand: Optional[float] = None
+    on_order: Optional[float] = None
+    margin_pct: Optional[float] = None
 
 
-class ETLFileReadSummary(BaseModel):
+class WeeklyReportFileSummary(BaseModel):
     file_name: str
-    source: SourceType
-    detected_columns: List[str]
-    mapped_columns: List[str]
-    missing_required_columns: List[str]
     rows_read: int
+    product_rows_detected: int
+    daily_rows_output: int
+    issue_count: int
+    status: str

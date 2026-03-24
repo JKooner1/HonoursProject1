@@ -1,131 +1,157 @@
-import pandas as pd
+import csv
+from pathlib import Path
 
-from app.ingestion.cleaners import clean_sales_chunk
-from app.ingestion.readers import build_column_mapping, normalise_column_name
-from app.ingestion.schemas import SourceType
-
-
-def test_normalise_column_name() -> None:
-    assert normalise_column_name("Order Time") == "order_time"
-    assert normalise_column_name("Unit-Price") == "unit_price"
-    assert normalise_column_name("Line/Total") == "line_total"
+from app.ingestion.report_transformer import transform_weekly_report_file
 
 
-def test_build_column_mapping_for_pos() -> None:
-    input_columns = ["Till Time", "Barcode", "Item", "Dept", "Sold Qty", "Gross Sales"]
-    mapping = build_column_mapping(SourceType.POS, input_columns)
-
-    assert mapping["Till Time"] == "ts"
-    assert mapping["Barcode"] == "sku"
-    assert mapping["Item"] == "product_name"
-    assert mapping["Dept"] == "category"
-    assert mapping["Sold Qty"] == "qty"
-    assert mapping["Gross Sales"] == "line_total_gbp"
+def _write_row(writer: csv.writer, cells: dict[int, str], width: int = 64) -> None:
+    row = [""] * width
+    for index, value in cells.items():
+        row[index] = value
+    writer.writerow(row)
 
 
-def test_build_column_mapping_for_delivery() -> None:
-    input_columns = ["Order Time", "Menu SKU", "Menu Category", "Ordered Qty", "Order Total"]
-    mapping = build_column_mapping(SourceType.DELIVERY, input_columns)
+def _build_sample_report_csv(file_path: Path) -> None:
+    with open(file_path, "w", encoding="utf-8-sig", newline="") as file_handle:
+        writer = csv.writer(file_handle)
 
-    assert mapping["Order Time"] == "ts"
-    assert mapping["Menu SKU"] == "sku"
-    assert mapping["Menu Category"] == "category"
-    assert mapping["Ordered Qty"] == "qty"
-    assert mapping["Order Total"] == "line_total_gbp"
-
-
-def test_clean_sales_chunk_removes_invalid_rows_and_maps_unknown_category() -> None:
-    df = pd.DataFrame(
-        [
+        _write_row(writer, {})
+        _write_row(writer, {1: "Daily Product Sales Report"})
+        _write_row(
+            writer,
             {
-                "ts": "2025-01-10 10:30:00",
-                "sku": "A100",
-                "product_name": "Milk",
-                "category": "",
-                "qty": "2",
-                "unit_price_gbp": "1.50",
-                "line_total_gbp": "3.00",
-                "transaction_id": "T1",
-                "source": "pos",
+                1: (
+                    "For Week 202611    22-Feb-2026 to 28-Feb-2026\n"
+                    "Suppliers: ALL\nDepartments: ALL\nSubDepartments: ALL\nBranches: PREMIER\nEvents: ALL"
+                )
             },
+        )
+        for _ in range(6):
+            _write_row(writer, {})
+
+        _write_row(
+            writer,
             {
-                "ts": "",
-                "sku": "A101",
-                "product_name": "Bread",
-                "category": "Bakery",
-                "qty": "1",
-                "unit_price_gbp": "1.20",
-                "line_total_gbp": "1.20",
-                "transaction_id": "T2",
-                "source": "pos",
+                0: "Stk Code",
+                8: "Product Description",
+                19: "SUN",
+                23: "MON",
+                26: "TUE",
+                28: "WED",
+                31: "THU",
+                34: "FRI",
+                38: "SAT",
+                41: "Total",
+                46: "Value",
+                50: "Cost",
+                53: "Profit",
+                56: "In Stk",
+                59: "On Ord",
+                62: "%",
             },
-        ]
-    )
+        )
 
-    result = clean_sales_chunk(df=df, file_name="sample.csv")
+        _write_row(writer, {})
+        _write_row(writer, {0: "Dept:", 4: "2-GROCERY VATABLE"})
+        _write_row(writer, {})
+        _write_row(writer, {5: "Sub Dept:", 12: "3-SOFT DRINKS"})
+        _write_row(writer, {})
 
-    assert len(result.cleaned_df) == 1
-    assert result.cleaned_df.iloc[0]["category"] == "Other"
-    assert result.metrics["missing_ts"] == 1
-    assert len(result.issue_rows) >= 1
-
-
-def test_clean_sales_chunk_removes_duplicates_by_ts_sku_source() -> None:
-    df = pd.DataFrame(
-        [
+        _write_row(
+            writer,
             {
-                "ts": "2025-01-10 10:30:00",
-                "sku": "A100",
-                "product_name": "Milk",
-                "category": "Dairy",
-                "qty": "2",
-                "unit_price_gbp": "1.50",
-                "line_total_gbp": "3.00",
-                "transaction_id": "T1",
-                "source": "pos",
+                0: "SKU001",
+                8: "REDBULL 355ML",
+                19: "1",
+                23: "2",
+                26: "3",
+                28: "4",
+                31: "5",
+                33: "6",
+                37: "7",
+                42: "28",
+                46: "56.00",
+                50: "40.00",
+                53: "16.00",
+                56: "10",
+                59: "0",
+                61: "28.57",
             },
+        )
+
+        _write_row(
+            writer,
             {
-                "ts": "2025-01-10 10:30:00",
-                "sku": "A100",
-                "product_name": "Milk",
-                "category": "Dairy",
-                "qty": "2",
-                "unit_price_gbp": "1.50",
-                "line_total_gbp": "3.00",
-                "transaction_id": "T1_DUP",
-                "source": "pos",
+                0: "SKU002",
+                8: "LUCOZADE ENERGY ORANGE",
+                16: "500ML",
+                19: "2",
+                23: "2",
+                26: "2",
+                28: "2",
+                31: "2",
+                33: "2",
+                37: "2",
+                42: "20",
+                46: "30.00",
+                50: "18.00",
+                53: "12.00",
+                56: "5",
+                59: "1",
+                61: "40.00",
             },
-        ]
-    )
+        )
 
-    result = clean_sales_chunk(df=df, file_name="dupes.csv")
-
-    assert len(result.cleaned_df) == 1
-    assert result.metrics["duplicate_rows_removed"] == 1
-
-
-def test_clean_sales_chunk_flags_refund_sign_inconsistency() -> None:
-    df = pd.DataFrame(
-        [
+        _write_row(
+            writer,
             {
-                "ts": "2025-01-10 10:30:00",
-                "sku": "R100",
-                "product_name": "Refund Item",
-                "category": "General",
-                "qty": "1",
-                "unit_price_gbp": "2.50",
-                "line_total_gbp": "-2.50",
-                "transaction_id": "R1",
-                "source": "delivery",
-            }
-        ]
-    )
+                0: "Grand Total:",
+                19: "3",
+                23: "4",
+            },
+        )
 
-    result = clean_sales_chunk(df=df, file_name="refunds.csv")
 
-    assert len(result.cleaned_df) == 1
-    assert result.metrics["refund_inconsistency_flagged"] == 1
-    assert any(
-        issue["issue_type"] == "refund_sign_inconsistency"
-        for issue in result.issue_rows
-    )
+def test_transform_weekly_report_file_outputs_daily_rows(tmp_path: Path) -> None:
+    file_path = tmp_path / "sample_week.csv"
+    _build_sample_report_csv(file_path)
+
+    result = transform_weekly_report_file(file_path)
+
+    assert len(result.transformed_df) == 14
+    assert result.metrics["product_rows_detected"] == 2
+    assert result.metrics["daily_rows_output"] == 14
+    assert result.metrics["issue_count"] == 1
+
+
+def test_transform_weekly_report_preserves_department_context(tmp_path: Path) -> None:
+    file_path = tmp_path / "sample_week.csv"
+    _build_sample_report_csv(file_path)
+
+    result = transform_weekly_report_file(file_path)
+
+    assert set(result.transformed_df["department"]) == {"GROCERY VATABLE"}
+    assert set(result.transformed_df["sub_department"]) == {"SOFT DRINKS"}
+
+
+def test_transform_weekly_report_estimates_daily_value_from_weekly_value(tmp_path: Path) -> None:
+    file_path = tmp_path / "sample_week.csv"
+    _build_sample_report_csv(file_path)
+
+    result = transform_weekly_report_file(file_path)
+
+    redbull_rows = result.transformed_df[
+        result.transformed_df["product_name"] == "REDBULL 355ML"
+    ].copy()
+
+    assert round(redbull_rows["estimated_daily_value_gbp"].sum(), 2) == 56.00
+    assert round(redbull_rows["estimated_unit_price_gbp"].iloc[0], 2) == 2.00
+
+
+def test_transform_weekly_report_combines_product_name_and_variant(tmp_path: Path) -> None:
+    file_path = tmp_path / "sample_week.csv"
+    _build_sample_report_csv(file_path)
+
+    result = transform_weekly_report_file(file_path)
+
+    assert "LUCOZADE ENERGY ORANGE 500ML" in set(result.transformed_df["product_name"])
