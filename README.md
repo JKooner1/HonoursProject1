@@ -59,7 +59,7 @@ cd path\to\HonoursProject1
 ```
 
 # 1. Create Virtual Environment - Creates an isolated Python environment.
-python -m venv
+python -m venv .venv
 
 # 2. Activate Environment - Activates the environment
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass

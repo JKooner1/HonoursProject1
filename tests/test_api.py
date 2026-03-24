@@ -1,5 +1,4 @@
 from datetime import date
-from pathlib import Path
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -85,7 +84,11 @@ def _seed_forecast_file() -> None:
 def test_healthcheck() -> None:
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json()["status"] == "ok"
+    payload = response.json()
+
+    assert payload["status"] == "ok"
+    assert "app_name" in payload
+    assert "version" in payload
 
 
 def test_daily_kpi_endpoint() -> None:
@@ -95,7 +98,10 @@ def test_daily_kpi_endpoint() -> None:
     assert response.status_code == 200
 
     payload = response.json()
+    assert "meta" in payload
     assert "items" in payload
+    assert payload["meta"]["total_items"] == 2
+    assert payload["meta"]["metric"] == "units_sold"
     assert len(payload["items"]) == 2
     assert payload["items"][0]["units_sold"] == 10.0
 
@@ -107,9 +113,17 @@ def test_weekly_kpi_endpoint() -> None:
     assert response.status_code == 200
 
     payload = response.json()
+    assert "meta" in payload
     assert "items" in payload
+    assert payload["meta"]["total_items"] == 1
     assert len(payload["items"]) == 1
     assert payload["items"][0]["units_sold"] == 18.0
+
+
+def test_daily_kpi_invalid_date_range() -> None:
+    response = client.get("/kpi/daily?start_date=2026-03-10&end_date=2026-03-01")
+    assert response.status_code == 400
+    assert "start_date cannot be later" in response.json()["detail"]
 
 
 def test_forecast_daily_endpoint() -> None:
@@ -119,6 +133,8 @@ def test_forecast_daily_endpoint() -> None:
     assert response.status_code == 200
 
     payload = response.json()
+    assert "meta" in payload
     assert "items" in payload
+    assert payload["meta"]["forecast_horizon_days"] == 2
     assert len(payload["items"]) == 2
     assert payload["items"][0]["forecast_units_sold"] == 980.86
