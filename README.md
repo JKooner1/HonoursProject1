@@ -128,7 +128,8 @@ python run_dashboard.py
 
 Open - http://127.0.0.1:8050
 
-# Full Pipeline from Scratch
+# Full Pipeline (From Scratch)
+
 python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .venv\Scripts\Activate.ps1
@@ -138,3 +139,10 @@ python -m scripts.init_db
 python -m scripts.run_etl
 python -m scripts.build_kpis
 python -m scripts.forecast
+python -m scripts.evaluate_forecast
+python -m scripts.project_summary
+
+## Evaluate Forecast
+
+```powershell
+python -m scripts.evaluate_forecast
