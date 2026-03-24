@@ -74,6 +74,11 @@ pip install -r requirements.txt
 ```powershell
 python scripts/init_db.py
 ```
+# Initialise the SQLite database:
+
+```powershell
+python -m scripts.init_db
+```
 
 # Run tests
 ```powershell
