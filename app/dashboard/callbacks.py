@@ -5,7 +5,8 @@ from typing import Optional
 
 import pandas as pd
 import plotly.express as px
-from dash import Input, Output, html
+from dash import Input, Output
+from plotly import graph_objects as go
 from sqlalchemy import select
 
 from app.dashboard.components import metric_card
@@ -34,6 +35,22 @@ def get_dashboard_filter_defaults() -> tuple[Optional[str], Optional[str], list[
     max_date = df["sale_date"].max().date().isoformat()
     departments = _get_department_list()
     return min_date, max_date, departments
+
+
+def _apply_clean_chart_layout(fig, height: int = 420):
+    fig.update_layout(
+        template="plotly_white",
+        height=height,
+        margin=dict(l=30, r=20, t=50, b=40),
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        font=dict(color="#111827"),
+        title=dict(font=dict(size=20)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(gridcolor="#e5e7eb", zeroline=False)
+    return fig
 
 
 def register_callbacks(app) -> None:
@@ -88,83 +105,127 @@ def register_callbacks(app) -> None:
         forecast_total = float(forecast_df["forecast_units_sold"].sum()) if not forecast_df.empty else 0.0
 
         cards = [
-            metric_card("Total Units Sold", f"{total_units:,.0f}", "Filtered selection"),
-            metric_card("Average Daily Units", f"{avg_daily_units:,.1f}", "Across selected date range"),
-            metric_card("Top Department", top_department, "By units sold"),
-            metric_card("Next 7-Day Forecast", f"{forecast_total:,.1f}", "Forecast units total"),
+            metric_card("Total Units Sold", f"{total_units:,.0f}", "Across selected filter"),
+            metric_card("Average Daily Units", f"{avg_daily_units:,.1f}", "Mean daily units sold"),
+            metric_card("Top Department", top_department, "Highest by units sold"),
+            metric_card("Next 7-Day Forecast", f"{forecast_total:,.1f}", "Projected units total"),
         ]
 
         if bundle.daily_units_ma.empty:
-            daily_fig = px.line(title="Daily Units Sold")
+            daily_fig = go.Figure()
+            daily_fig.update_layout(title="Daily Units Sold and 7-Day Moving Average")
+            daily_fig = _apply_clean_chart_layout(daily_fig)
         else:
             daily_chart_df = bundle.daily_units_ma.copy()
             daily_chart_df["sale_date"] = pd.to_datetime(daily_chart_df["sale_date"])
-            daily_fig = px.line(
-                daily_chart_df,
-                x="sale_date",
-                y=["units_sold", "units_sold_ma_7"],
-                title="Daily Units Sold and 7-Day Moving Average",
-                labels={"value": "Units Sold", "sale_date": "Date", "variable": "Series"},
+
+            daily_fig = go.Figure()
+            daily_fig.add_trace(
+                go.Scatter(
+                    x=daily_chart_df["sale_date"],
+                    y=daily_chart_df["units_sold"],
+                    mode="lines+markers",
+                    name="Daily Units",
+                    line=dict(width=3, color="#2563eb"),
+                    marker=dict(size=7),
+                )
             )
-            daily_fig.update_layout(template="plotly_white")
+            daily_fig.add_trace(
+                go.Scatter(
+                    x=daily_chart_df["sale_date"],
+                    y=daily_chart_df["units_sold_ma_7"],
+                    mode="lines",
+                    name="7-Day Moving Average",
+                    line=dict(width=3, color="#f97316"),
+                )
+            )
+            daily_fig.update_layout(
+                title="Daily Units Sold and 7-Day Moving Average",
+                xaxis_title="Date",
+                yaxis_title="Units Sold",
+            )
+            daily_fig = _apply_clean_chart_layout(daily_fig)
 
         if bundle.weekly_units.empty:
-            weekly_fig = px.bar(title="Weekly Units Sold")
+            weekly_fig = go.Figure()
+            weekly_fig.update_layout(title="Weekly Units Sold")
+            weekly_fig = _apply_clean_chart_layout(weekly_fig)
         else:
             weekly_chart_df = bundle.weekly_units.copy()
             weekly_chart_df["week_label"] = (
-                pd.to_datetime(weekly_chart_df["week_start"]).dt.strftime("%Y-%m-%d")
+                pd.to_datetime(weekly_chart_df["week_start"]).dt.strftime("%d %b")
                 + " to "
-                + pd.to_datetime(weekly_chart_df["week_end"]).dt.strftime("%Y-%m-%d")
+                + pd.to_datetime(weekly_chart_df["week_end"]).dt.strftime("%d %b")
             )
             weekly_fig = px.bar(
                 weekly_chart_df,
                 x="week_label",
                 y="units_sold",
+                text="units_sold",
                 title="Weekly Units Sold",
                 labels={"week_label": "Week", "units_sold": "Units Sold"},
             )
-            weekly_fig.update_layout(template="plotly_white")
+            weekly_fig.update_traces(marker_color="#2563eb", texttemplate="%{text:.0f}")
+            weekly_fig = _apply_clean_chart_layout(weekly_fig)
 
         if bundle.top_products.empty:
-            top_products_fig = px.bar(title="Top Products")
+            top_products_fig = go.Figure()
+            top_products_fig.update_layout(title="Top 10 Products by Units Sold")
+            top_products_fig = _apply_clean_chart_layout(top_products_fig, height=500)
         else:
             top_products_fig = px.bar(
                 bundle.top_products.sort_values("units_sold", ascending=True),
                 x="units_sold",
                 y="product_name",
                 orientation="h",
+                text="units_sold",
                 title="Top 10 Products by Units Sold",
                 labels={"units_sold": "Units Sold", "product_name": "Product"},
             )
-            top_products_fig.update_layout(template="plotly_white")
+            top_products_fig.update_traces(marker_color="#4f46e5", texttemplate="%{text:.0f}")
+            top_products_fig = _apply_clean_chart_layout(top_products_fig, height=500)
 
         if bundle.top_categories.empty:
-            top_categories_fig = px.bar(title="Top Categories")
+            top_categories_fig = go.Figure()
+            top_categories_fig.update_layout(title="Top Departments by Units Sold")
+            top_categories_fig = _apply_clean_chart_layout(top_categories_fig, height=500)
         else:
             top_categories_fig = px.bar(
                 bundle.top_categories.sort_values("units_sold", ascending=True),
                 x="units_sold",
                 y="department",
                 orientation="h",
+                text="units_sold",
                 title="Top Departments by Units Sold",
                 labels={"units_sold": "Units Sold", "department": "Department"},
             )
-            top_categories_fig.update_layout(template="plotly_white")
+            top_categories_fig.update_traces(marker_color="#0ea5e9", texttemplate="%{text:.0f}")
+            top_categories_fig = _apply_clean_chart_layout(top_categories_fig, height=500)
 
         if forecast_df.empty:
-            forecast_fig = px.line(title="7-Day Forecast")
+            forecast_fig = go.Figure()
+            forecast_fig.update_layout(title="7-Day Forecast Units Sold")
+            forecast_fig = _apply_clean_chart_layout(forecast_fig)
         else:
             forecast_df = forecast_df.copy()
             forecast_df["sale_date"] = pd.to_datetime(forecast_df["sale_date"])
-            forecast_fig = px.line(
-                forecast_df,
-                x="sale_date",
-                y="forecast_units_sold",
-                markers=True,
-                title="7-Day Forecast Units Sold",
-                labels={"sale_date": "Date", "forecast_units_sold": "Forecast Units Sold"},
+
+            forecast_fig = go.Figure()
+            forecast_fig.add_trace(
+                go.Scatter(
+                    x=forecast_df["sale_date"],
+                    y=forecast_df["forecast_units_sold"],
+                    mode="lines+markers",
+                    name="Forecast Units",
+                    line=dict(width=3, color="#059669"),
+                    marker=dict(size=8),
+                )
             )
-            forecast_fig.update_layout(template="plotly_white")
+            forecast_fig.update_layout(
+                title="7-Day Forecast Units Sold",
+                xaxis_title="Forecast Date",
+                yaxis_title="Forecast Units Sold",
+            )
+            forecast_fig = _apply_clean_chart_layout(forecast_fig)
 
         return cards, daily_fig, weekly_fig, top_products_fig, top_categories_fig, forecast_fig
